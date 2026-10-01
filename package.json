@@ -1,0 +1,16 @@
+{
+  "name": "jobcan-agent",
+  "private": true,
+  "description": "Unofficial agent tooling for Jobcan 勤怠管理: an MCP server plus orchestration skills",
+  "license": "MIT",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

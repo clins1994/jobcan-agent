@@ -1,0 +1,34 @@
+{
+  "name": "jobcan-mcp-server",
+  "version": "0.1.0",
+  "description": "Personal MCP server for Jobcan 勤怠管理 leave requests (browser automation)",
+  "type": "module",
+  "bin": {
+    "jobcan-mcp-server": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -p tsconfig.test.json",
+    "inspect": "npx @modelcontextprotocol/inspector node dist/index.js",
+    "verify": "npm run build && node dist/cli/verify.js"
+  },
+  "dependencies": {
+    "@holiday-jp/holiday_jp": "^2.5.2",
+    "@modelcontextprotocol/sdk": "^1.17.0",
+    "node-html-parser": "^9.0.4",
+    "playwright": "^1.47.0",
+    "tough-cookie": "^6.0.2",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.5.0",
+    "vitest": "^5.0.2"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

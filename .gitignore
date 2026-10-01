@@ -1,0 +1,16 @@
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+*.log
+.DS_Store
+
+# secrets and user-local state: never committed
+.env
+.env.*
+!.env.example
+preset.md
+.jobcan-mcp/
+
+# local agent settings
+.claude/settings.local.json

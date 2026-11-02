@@ -32,7 +32,13 @@ npm install
 npm run build
 npm test
 npm run verify -w packages/mcp   # read-only check against real Jobcan, needs the Keychain entry
+npm run bundle                   # rebuild packages/mcp/bundle/jobcan-mcp.mjs
 ```
+
+The repository is also the Claude Code plugin `jobcan` (`.claude-plugin/plugin.json`, `.mcp.json`).
+The plugin runs the committed bundle, because the marketplace pins a commit sha and nothing is
+built on install. After any change under `packages/mcp/src`, run `npm run bundle` and commit the
+bundle in the same commit. CI fails when the bundle differs from the source.
 
 Register the server with your agent host, pointing at `packages/mcp/dist/index.js`; set
 `JOBCAN_ALLOW_WRITES=1` in its environment to allow writes. See `packages/mcp/README.md` for

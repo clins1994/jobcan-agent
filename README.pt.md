@@ -91,9 +91,9 @@ construído. Funcionou de ponta a ponta ao menos uma vez; não está provado par
   por horas pendente por um dia inteiro.
 - Ponto: um mês inteiro de entradas e saídas (15 dias, 30 registros), contornando folgas por horas.
   Uma segunda execução não registra nada em dobro enquanto a primeira aguarda aprovação.
-- A skill `jobcan-request-leave`, conduzida passo a passo: solicitar; postar no canal conforme as
+- A skill `jobcan:request-leave`, conduzida passo a passo: solicitar; postar no canal conforme as
   regras dele e reagir; criar o evento de ausência. O procedimento de fim de mês que virou
-  `jobcan-backfill`, conduzido do mesmo jeito: conciliar o canal, a agenda e o Jobcan; solicitar as
+  `jobcan:backfill`, conduzido do mesmo jeito: conciliar o canal, a agenda e o Jobcan; solicitar as
   folgas que faltavam; preencher o ponto.
 - 427 testes unitários contra fakes do cliente e das páginas do Jobcan, e `npm run verify` contra o
   sistema real.
@@ -104,8 +104,8 @@ construído. Funcionou de ponta a ponta ao menos uma vez; não está provado par
   pedir para ser configurado, sem ajuda do autor.
 - **Uma sessão nova** com o servidor registrado e as skills linkadas: chamar uma skill pelo nome,
   ou apenas dizer "quero folga na próxima sexta" ou "preencha o mês passado". Até aqui o autor
-  conduziu as skills à mão, e `jobcan-backfill` nunca rodou como skill.
-- **`jobcan-setup`**, o construtor interativo de preset. Ainda não existe; presets são escritos à
+  conduziu as skills à mão, e `jobcan:backfill` nunca rodou como skill.
+- **`jobcan:setup`**, o construtor interativo de preset. Ainda não existe; presets são escritos à
   mão. Deve perguntar sobre o seu fluxo (só chat, só agenda, chat primeiro e Jobcan depois, o seu
   horário habitual) e escrever o preset por você.
 - **Outros fluxos**: só agenda, só chat, chat primeiro; Teams e Outlook (há notas de referência,

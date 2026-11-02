@@ -1,9 +1,9 @@
 ---
-name: jobcan-backfill
+name: backfill
 description: Bring a past month in Jobcan up to date — compare what the user actually did (their chat posts, their calendar) with what Jobcan has, file the leave that is missing, then fill in the attendance for the days they worked — with one preview and one confirmation per step. Use when the user asks to backfill, catch up, fill in or close a month, or to record last month's attendance.
 ---
 
-# jobcan-backfill
+# jobcan:backfill
 
 Month-end catch-up. Nothing is assumed about how the user works: the preset says which sources
 count as evidence of what they did and what their usual day looks like.
@@ -57,6 +57,6 @@ count as evidence of what they did and what their usual day looks like.
 - Never record attendance for a day the user has not accounted for if a source says they were
   away that day; that day goes to "unclear".
 - Do not post anything to the channel or the calendar in this skill. If the reconciliation shows a
-  leave that was filed but never announced, say so and offer `jobcan-request-leave`'s announcement
+  leave that was filed but never announced, say so and offer `jobcan:request-leave`'s announcement
   step separately.
 - Jobcan is the source of truth for the result; the chat and calendar are evidence of intent.

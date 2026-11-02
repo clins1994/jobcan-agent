@@ -33,7 +33,7 @@ The skills read this file; the Jobcan tools do not need it.
 
 ## Backfill
 
-Which sources show what I actually did in a month (the `jobcan-backfill` skill reads these):
+Which sources show what I actually did in a month (the `jobcan:backfill` skill reads these):
 
 - Chat channel: yes, the channel above, my own posts and their threads
 - Calendar: yes, out-of-office events on my primary calendar
@@ -41,7 +41,7 @@ Which sources show what I actually did in a month (the `jobcan-backfill` skill r
 
 ## Discovered form (optional)
 
-Filled in by `jobcan-setup` once it exists; until then `jobcan_discover_forms` prints it.
+Filled in by `jobcan:setup` once it exists; until then `jobcan_discover_forms` prints it.
 
 - Fingerprint: `<from jobcan_discover_forms>`
 - Leave types: `<from jobcan_list_leave_types>`

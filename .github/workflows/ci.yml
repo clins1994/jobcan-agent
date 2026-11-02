@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+      - run: npm test
+      - run: npm run typecheck -w packages/mcp
+      - run: npm run build
+      - name: The committed bundle matches the source
+        run: |
+          npm run bundle
+          git diff --exit-code -- packages/mcp/bundle || {
+            echo "packages/mcp/bundle is out of date. Run npm run bundle and commit the result."
+            exit 1
+          }

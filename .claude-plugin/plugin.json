@@ -1,0 +1,14 @@
+{
+  "name": "jobcan",
+  "version": "0.1.0",
+  "description": "Unofficial agent tooling for Jobcan 勤怠管理: file and cancel leave, and backfill a month of attendance. Bundles the jobcan MCP server.",
+  "author": {
+    "name": "Caio Lins",
+    "email": "dev@clins.me",
+    "url": "https://github.com/clins1994"
+  },
+  "homepage": "https://github.com/clins1994/jobcan-agent",
+  "repository": "https://github.com/clins1994/jobcan-agent",
+  "license": "MIT",
+  "keywords": ["jobcan", "attendance", "leave", "mcp"]
+}

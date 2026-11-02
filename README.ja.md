@@ -39,6 +39,42 @@ AI エージェント(Claude、ChatGPT など)からジョブカン勤怠管理�
 必要なもの: macOS(認証情報はキーチェーンから読みます)、Node.js 20 以上、メールアドレスとパスワードで
 ログインするジョブカンのアカウント。シングルサインオンや二段階認証は検出して停止します(未対応)。
 
+### Claude Code プラグイン
+
+このリポジトリは `jobcan` という名前の Claude Code プラグインです。スキルを含み、同梱のファイルから
+MCP サーバーを起動するので、クローンもビルドも要りません。
+
+1. このプラグインを載せたマーケットプレイス(例: `clins1994/skills-pack`)を追加し、プラグインを
+   インストールします。`<marketplace>` は `claude plugin marketplace add` が表示する名前です:
+
+   ```bash
+   claude plugin marketplace add clins1994/skills-pack
+   claude plugin install jobcan@<marketplace>
+   ```
+
+2. ジョブカンのパスワードをキーチェーンに保存します。コマンドがパスワードを聞きます:
+
+   ```bash
+   security add-generic-password -s jobcan-mcp -a you@example.com -w
+   ```
+
+3. [`preset.example.md`](preset.example.md) を `~/.config/jobcan-agent/preset.md` にコピーし、
+   チャンネル、そのルール、いつもの勤務時間を記入します。
+4. プリセットで使うコネクタ(Slack または Teams、Google カレンダーまたは Outlook)を有効にします。
+   コネクタがなければその手順は飛ばされるだけで、ジョブカンへの申請は止まりません。
+
+その後、新しいセッションで「有給の残日数を教えて」「来週金曜休みたい」「10月分をバックフィルして」と
+頼んでください。スキルは `/jobcan:request-leave`、`/jobcan:cancel-leave`、`/jobcan:backfill` としても
+呼べます。プラグインは書き込みを許可した状態でサーバーを起動しますが、どの書き込みも計画を確認する
+までは試行(dry run)のままです。
+
+スキルを読む他のエージェントでは、`npx skills add clins1994/jobcan-agent` で同じ `skills/` を
+入れられます。MCP サーバーは下の手順で登録します。
+
+### チェックアウトから
+
+開発用、または Claude Code 以外のエージェントで使う場合の手順です。
+
 ```bash
 git clone https://github.com/clins1994/jobcan-agent.git
 cd jobcan-agent
@@ -57,23 +93,11 @@ claude mcp add jobcan -e JOBCAN_ALLOW_WRITES=1 -- node "$PWD/packages/mcp/dist/i
 Claude Desktop では `mcpServers.jobcan` に `{"command": "node", "args": ["<repo>/packages/mcp/dist/index.js"],
 "env": {"JOBCAN_ALLOW_WRITES": "1"}}` を追加します。
 
-試す: 「有給の残日数を教えて」→「来週金曜に休みを取る計画を立てて」→ 確認。
+スキルを使うには、上の手順 3 のとおりプリセットをコピーし、スキルを `~/.claude/skills/` にリンクします:
 
-ここまでで ジョブカンのツールは使えます。チャットとカレンダーの手順を追加するスキルを使うには:
-
-1. [`preset.example.md`](preset.example.md) を `~/.config/jobcan-agent/preset.md` にコピーし、
-   チャンネル、そのルール、いつもの勤務時間を記入します。
-2. スキルをエージェントから見える場所に置きます。Claude Code なら `~/.claude/skills/` にリンクか
-   コピーします:
-
-   ```bash
-   for s in skills/*/; do ln -s "$PWD/$s" ~/.claude/skills/; done
-   ```
-
-3. プリセットで使うコネクタ(Slack または Teams、Google カレンダーまたは Outlook)をエージェントで
-   有効にします。コネクタがなければその手順は飛ばされるだけで、ジョブカンへの申請は止まりません。
-
-その後、新しいセッションで「来週金曜休みたい」や「先月分をバックフィルして」と頼んでください。
+```bash
+for s in skills/*/; do ln -s "$PWD/$s" ~/.claude/skills/; done
+```
 
 ## これまでに検証したこと
 

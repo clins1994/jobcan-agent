@@ -44,12 +44,11 @@ AI エージェント(Claude、ChatGPT など)からジョブカン勤怠管理�
 このリポジトリは `jobcan` という名前の Claude Code プラグインです。スキルを含み、同梱のファイルから
 MCP サーバーを起動するので、クローンもビルドも要りません。
 
-1. このプラグインを載せたマーケットプレイス(例: `clins1994/skills-pack`)を追加し、プラグインを
-   インストールします。`<marketplace>` は `claude plugin marketplace add` が表示する名前です:
+1. このリポジトリをマーケットプレイスとして追加し、プラグインをインストールします:
 
    ```bash
-   claude plugin marketplace add clins1994/skills-pack
-   claude plugin install jobcan@<marketplace>
+   claude plugin marketplace add clins1994/jobcan-agent
+   claude plugin install jobcan@jobcan
    ```
 
 2. ジョブカンのパスワードをキーチェーンに保存します。コマンドがパスワードを聞きます:

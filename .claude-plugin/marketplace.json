@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
+  "name": "jobcan",
+  "description": "Unofficial agent tooling for Jobcan 勤怠管理, as one Claude Code plugin.",
+  "owner": {
+    "name": "Caio Lins",
+    "url": "https://github.com/clins1994"
+  },
+  "plugins": [
+    {
+      "name": "jobcan",
+      "source": "./",
+      "description": "File and cancel leave, and backfill a month of attendance in Jobcan. Bundles the jobcan MCP server."
+    }
+  ]
+}

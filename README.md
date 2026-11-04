@@ -45,12 +45,11 @@ and stop with a message; they are not supported yet.
 The repository is a Claude Code plugin named `jobcan`. It contains the skills and starts the MCP
 server from a bundled file, so you do not need to clone or build anything.
 
-1. Add a marketplace that lists the plugin, for example `clins1994/skills-pack`, and install the
-   plugin. `<marketplace>` is the name that `claude plugin marketplace add` prints:
+1. Add this repository as a marketplace, and install the plugin:
 
    ```bash
-   claude plugin marketplace add clins1994/skills-pack
-   claude plugin install jobcan@<marketplace>
+   claude plugin marketplace add clins1994/jobcan-agent
+   claude plugin install jobcan@jobcan
    ```
 
 2. Store your Jobcan password in the Keychain. The command prompts for it:

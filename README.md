@@ -40,6 +40,42 @@ Requirements: macOS (credentials are read from the Keychain), Node.js 20 or newe
 account that signs in with email and password. Single sign-on and two-factor prompts are detected
 and stop with a message; they are not supported yet.
 
+### Claude Code plugin
+
+The repository is a Claude Code plugin named `jobcan`. It contains the skills and starts the MCP
+server from a bundled file, so you do not need to clone or build anything.
+
+1. Add a marketplace that lists the plugin, for example `clins1994/skills-pack`, and install the
+   plugin. `<marketplace>` is the name that `claude plugin marketplace add` prints:
+
+   ```bash
+   claude plugin marketplace add clins1994/skills-pack
+   claude plugin install jobcan@<marketplace>
+   ```
+
+2. Store your Jobcan password in the Keychain. The command prompts for it:
+
+   ```bash
+   security add-generic-password -s jobcan-mcp -a you@example.com -w
+   ```
+
+3. Copy [`preset.example.md`](preset.example.md) to `~/.config/jobcan-agent/preset.md` and fill
+   it in with your channel, its rules and your usual day.
+4. Enable the connectors your preset uses (Slack or Teams, Google Calendar or Outlook). A missing
+   connector skips that step. It never blocks the Jobcan request.
+
+Then, in a new session: "check my leave balance", "take next Friday off" or "backfill October".
+The skills are also available as `/jobcan:request-leave`, `/jobcan:cancel-leave` and
+`/jobcan:backfill`. The plugin starts the server with writes allowed, and every write is still a
+dry run until you confirm the plan.
+
+For other agents that read skills, `npx skills add clins1994/jobcan-agent` installs the same
+`skills/` folders. Register the MCP server as described below.
+
+### From a checkout
+
+Use this for development, or for an agent host that is not Claude Code.
+
 ```bash
 git clone https://github.com/clins1994/jobcan-agent.git
 cd jobcan-agent
@@ -58,23 +94,11 @@ claude mcp add jobcan -e JOBCAN_ALLOW_WRITES=1 -- node "$PWD/packages/mcp/dist/i
 For Claude Desktop, add `{"command": "node", "args": ["<repo>/packages/mcp/dist/index.js"],
 "env": {"JOBCAN_ALLOW_WRITES": "1"}}` under `mcpServers.jobcan`.
 
-Try: "check my leave balance", then "plan a day off next Friday", then confirm.
+For the skills, copy the preset as in step 3 above, then link the skills into `~/.claude/skills/`:
 
-That is enough for the Jobcan tools. For the skills, which add the chat and calendar steps:
-
-1. Copy [`preset.example.md`](preset.example.md) to `~/.config/jobcan-agent/preset.md` and fill
-   it in with your channel, its rules and your usual day.
-2. Make the skills visible to your agent. For Claude Code, link or copy them into
-   `~/.claude/skills/`:
-
-   ```bash
-   for s in skills/*/; do ln -s "$PWD/$s" ~/.claude/skills/; done
-   ```
-
-3. Enable the connectors your preset uses (Slack or Teams, Google Calendar or Outlook) in your
-   agent. A missing connector skips that step; it never blocks the Jobcan request.
-
-Then, in a new session: "take next Friday off" or "backfill last month".
+```bash
+for s in skills/*/; do ln -s "$PWD/$s" ~/.claude/skills/; done
+```
 
 ## Tested so far
 
@@ -90,9 +114,9 @@ agent. It worked end to end at least once; it is not proven for every setup.
   request with a full day.
 - Attendance: a whole month of clock-ins and clock-outs (15 days, 30 records), working around
   hourly leave. A second run records nothing twice while the first awaits approval.
-- The `jobcan-request-leave` skill, driven step by step: file; post in the channel per its rules
+- The `jobcan:request-leave` skill, driven step by step: file; post in the channel per its rules
   and react; create the out-of-office event. The month-end procedure that became
-  `jobcan-backfill`, driven the same way: reconcile the chat channel, the calendar and Jobcan;
+  `jobcan:backfill`, driven the same way: reconcile the chat channel, the calendar and Jobcan;
   file the missing leave; fill in the attendance.
 - 427 unit tests against fakes of the client and of Jobcan's pages, and `npm run verify` against
   the real thing.
@@ -103,8 +127,8 @@ agent. It worked end to end at least once; it is not proven for every setup.
   no help from the author.
 - **A fresh session** with the server registered and the skills linked: invoking a skill by name,
   or just saying "take next Friday off" or "backfill last month". So far the author drove the
-  skills by hand, and `jobcan-backfill` has never run as a skill at all.
-- **`jobcan-setup`**, the interactive preset builder. It does not exist yet; presets are written by
+  skills by hand, and `jobcan:backfill` has never run as a skill at all.
+- **`jobcan:setup`**, the interactive preset builder. It does not exist yet; presets are written by
   hand. It should ask about your own workflow (chat only, calendar only, chat first and Jobcan
   later, your usual hours) and write the preset for you.
 - **Other workflows**: calendar only, chat only, chat first; Teams and Outlook (reference notes

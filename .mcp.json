@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "jobcan": {
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/packages/mcp/bundle/jobcan-mcp.mjs"],
+      "env": {
+        "JOBCAN_ALLOW_WRITES": "1"
+      }
+    }
+  }
+}

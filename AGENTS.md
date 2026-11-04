@@ -32,7 +32,13 @@ npm install
 npm run build
 npm test
 npm run verify -w packages/mcp   # read-only check against real Jobcan, needs the Keychain entry
+npm run bundle                   # rebuild packages/mcp/bundle/jobcan-mcp.mjs
 ```
+
+The repository is also the Claude Code plugin `jobcan` (`.claude-plugin/plugin.json`, `.mcp.json`).
+The plugin runs the committed bundle, because the marketplace pins a commit sha and nothing is
+built on install. After any change under `packages/mcp/src`, run `npm run bundle` and commit the
+bundle in the same commit. CI fails when the bundle differs from the source.
 
 Register the server with your agent host, pointing at `packages/mcp/dist/index.js`; set
 `JOBCAN_ALLOW_WRITES=1` in its environment to allow writes. See `packages/mcp/README.md` for
@@ -63,11 +69,13 @@ recorded Jobcan's login flow and endpoints. Everything useful from it is in
 ├── README.ja.md         # Japanese. "Unofficial" notice at the top of both.
 ├── AGENTS.md            # setup instructions written FOR agents
 ├── packages/mcp/        # the MCP server (this scaffold moves here)
-├── skills/              # orchestration skills, installed via `npx skills add <owner>/<repo>`
-│   ├── jobcan-setup/          # interactive preset builder
-│   ├── jobcan-request-leave/  # references/: slack.md, teams.md, gcal.md, outlook.md
-│   ├── jobcan-cancel-leave/
-│   └── jobcan-backfill/       # month-end catch-up (the spec's jobcan-fix-punch)
+├── .claude-plugin/      # plugin.json: the repo is the Claude Code plugin `jobcan`
+├── .mcp.json            # starts the committed bundle packages/mcp/bundle/jobcan-mcp.mjs
+├── skills/              # orchestration skills: `/jobcan:<skill>` in the plugin, or `npx skills add <owner>/<repo>`
+│   ├── setup/                 # interactive preset builder
+│   ├── request-leave/         # references/: slack.md, teams.md, gcal.md, outlook.md
+│   ├── cancel-leave/
+│   └── backfill/              # month-end catch-up (the spec's jobcan-fix-punch)
 └── preset.example.md    # generic template only
 ```
 - **MCP = Jobcan only.** No Slack/Calendar/company logic. Returns typed, structured data.
@@ -110,10 +118,10 @@ Discovery / dev
 Saved at `~/.config/jobcan-agent/preset.md`. Two parts:
 - **Policy** (human-written, shared out of band, e.g. dropped in company chat): notification channel,
   mentions, message template, languages, reactions, cancel wording, admin contact
-- **Form schema** (discovered per user by `jobcan-setup`): leave types, required/optional fields,
+- **Form schema** (discovered per user by `jobcan:setup`): leave types, required/optional fields,
   defaults the user chose ("day off" → which type, default reason…), plus fingerprint
 
-`jobcan-setup` skill flow: crawl → ask only what forms can't answer (plain language) →
+`jobcan:setup` skill flow: crawl → ask only what forms can't answer (plain language) →
 dry-run each form → user confirms → write preset.
 
 ### 5. Runtime rules
@@ -153,7 +161,7 @@ dry-run each form → user confirms → write preset.
 
 ### 8. Phases
 1. Own Mac: verify login/navigation, build logic + FakeClient + tests, discovery, one real end-to-end run
-2. MCPB bundle + `jobcan-setup` skill + no-terminal install
+2. MCPB bundle + `jobcan:setup` skill + no-terminal install
 3. Pilot with one non-technical user, no help given
 4. Later: remote transport (Streamable HTTP + OAuth, e.g. Cloudflare Workers + Browser Rendering)
    for ChatGPT and phones; late arrival / early leave / stepping-away requests
@@ -176,9 +184,9 @@ Works, against one company's real Jobcan:
   files, and reports an uncovered day if the second step fails.
 - `src/index.ts`: the MCP tools. `JOBCAN_ALLOW_WRITES=1` turns writes on.
 - `src/cli/verify.ts` (`npm run verify`): read-only check of every page. Run it when Jobcan changes.
-- Skills `jobcan-request-leave`, `jobcan-cancel-leave` and `jobcan-backfill` (month-end catch-up;
+- Skills `jobcan:request-leave`, `jobcan:cancel-leave` and `jobcan:backfill` (month-end catch-up;
   the spec called it `jobcan-fix-punch`) exist. The first was exercised by hand end to end; the
-  procedure behind the third was run by hand before it was written as a skill. `jobcan-setup` does
+  procedure behind the third was run by hand before it was written as a skill. `jobcan:setup` does
   not exist. No MCPB bundle, `server.json`, evals or
   nightly smoke test yet.
 - 427 unit tests. Pages are fetched in English (`employee_language=en` cookie); parsers rely on it.

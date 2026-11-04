@@ -39,6 +39,42 @@ AI エージェント(Claude、ChatGPT など)からジョブカン勤怠管理�
 必要なもの: macOS(認証情報はキーチェーンから読みます)、Node.js 20 以上、メールアドレスとパスワードで
 ログインするジョブカンのアカウント。シングルサインオンや二段階認証は検出して停止します(未対応)。
 
+### Claude Code プラグイン
+
+このリポジトリは `jobcan` という名前の Claude Code プラグインです。スキルを含み、同梱のファイルから
+MCP サーバーを起動するので、クローンもビルドも要りません。
+
+1. このプラグインを載せたマーケットプレイス(例: `clins1994/skills-pack`)を追加し、プラグインを
+   インストールします。`<marketplace>` は `claude plugin marketplace add` が表示する名前です:
+
+   ```bash
+   claude plugin marketplace add clins1994/skills-pack
+   claude plugin install jobcan@<marketplace>
+   ```
+
+2. ジョブカンのパスワードをキーチェーンに保存します。コマンドがパスワードを聞きます:
+
+   ```bash
+   security add-generic-password -s jobcan-mcp -a you@example.com -w
+   ```
+
+3. [`preset.example.md`](preset.example.md) を `~/.config/jobcan-agent/preset.md` にコピーし、
+   チャンネル、そのルール、いつもの勤務時間を記入します。
+4. プリセットで使うコネクタ(Slack または Teams、Google カレンダーまたは Outlook)を有効にします。
+   コネクタがなければその手順は飛ばされるだけで、ジョブカンへの申請は止まりません。
+
+その後、新しいセッションで「有給の残日数を教えて」「来週金曜休みたい」「10月分をバックフィルして」と
+頼んでください。スキルは `/jobcan:request-leave`、`/jobcan:cancel-leave`、`/jobcan:backfill` としても
+呼べます。プラグインは書き込みを許可した状態でサーバーを起動しますが、どの書き込みも計画を確認する
+までは試行(dry run)のままです。
+
+スキルを読む他のエージェントでは、`npx skills add clins1994/jobcan-agent` で同じ `skills/` を
+入れられます。MCP サーバーは下の手順で登録します。
+
+### チェックアウトから
+
+開発用、または Claude Code 以外のエージェントで使う場合の手順です。
+
 ```bash
 git clone https://github.com/clins1994/jobcan-agent.git
 cd jobcan-agent
@@ -57,23 +93,11 @@ claude mcp add jobcan -e JOBCAN_ALLOW_WRITES=1 -- node "$PWD/packages/mcp/dist/i
 Claude Desktop では `mcpServers.jobcan` に `{"command": "node", "args": ["<repo>/packages/mcp/dist/index.js"],
 "env": {"JOBCAN_ALLOW_WRITES": "1"}}` を追加します。
 
-試す: 「有給の残日数を教えて」→「来週金曜に休みを取る計画を立てて」→ 確認。
+スキルを使うには、上の手順 3 のとおりプリセットをコピーし、スキルを `~/.claude/skills/` にリンクします:
 
-ここまでで ジョブカンのツールは使えます。チャットとカレンダーの手順を追加するスキルを使うには:
-
-1. [`preset.example.md`](preset.example.md) を `~/.config/jobcan-agent/preset.md` にコピーし、
-   チャンネル、そのルール、いつもの勤務時間を記入します。
-2. スキルをエージェントから見える場所に置きます。Claude Code なら `~/.claude/skills/` にリンクか
-   コピーします:
-
-   ```bash
-   for s in skills/*/; do ln -s "$PWD/$s" ~/.claude/skills/; done
-   ```
-
-3. プリセットで使うコネクタ(Slack または Teams、Google カレンダーまたは Outlook)をエージェントで
-   有効にします。コネクタがなければその手順は飛ばされるだけで、ジョブカンへの申請は止まりません。
-
-その後、新しいセッションで「来週金曜休みたい」や「先月分をバックフィルして」と頼んでください。
+```bash
+for s in skills/*/; do ln -s "$PWD/$s" ~/.claude/skills/; done
+```
 
 ## これまでに検証したこと
 
@@ -88,8 +112,8 @@ Claude Desktop では `mcpServers.jobcan` に `{"command": "node", "args": ["<re
   取り下げ、申請中の時間休から全休への差し替え。
 - 勤怠: 1か月分の出勤・退勤(15日・30件)、時間休の前後に合わせた入力。承認待ちの間にもう一度実行
   しても二重に入力しないこと。
-- スキル `jobcan-request-leave` を手順どおりに実行: 申請、チャンネルのルールに沿った投稿とリアクション、
-  不在イベントの作成。`jobcan-backfill` のもとになった月末の手順も同様に実行: チャットチャンネル・
+- スキル `jobcan:request-leave` を手順どおりに実行: 申請、チャンネルのルールに沿った投稿とリアクション、
+  不在イベントの作成。`jobcan:backfill` のもとになった月末の手順も同様に実行: チャットチャンネル・
   カレンダー・ジョブカンの突き合わせ、足りない休暇の申請、勤怠の入力。
 - クライアントとジョブカンのページのフェイクに対する 427 件のユニットテスト、実物に対する
   `npm run verify`。
@@ -100,8 +124,8 @@ Claude Desktop では `mcpServers.jobcan` に `{"command": "node", "args": ["<re
   作者の手助けなしに完了すること。
 - **新しいセッション**でサーバーを登録しスキルをリンクした状態で、スキル名を指定して呼ぶ、あるいは
   「来週金曜休みたい」「先月分をバックフィルして」とだけ頼むこと。これまでは作者がスキルを手動で進めて
-  おり、`jobcan-backfill` はスキルとしては一度も動いていません。
-- **`jobcan-setup`**(対話式のプリセット作成)。まだ存在せず、プリセットは手書きです。自分の
+  おり、`jobcan:backfill` はスキルとしては一度も動いていません。
+- **`jobcan:setup`**(対話式のプリセット作成)。まだ存在せず、プリセットは手書きです。自分の
   ワークフロー(チャットのみ、カレンダーのみ、先にチャットで連絡して後でジョブカン、いつもの勤務時間)
   を聞き取ってプリセットを書くものにする予定です。
 - **他のワークフロー**: カレンダーのみ、チャットのみ、チャットが先。Teams と Outlook(参照ノートは

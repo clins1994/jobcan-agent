@@ -1,9 +1,9 @@
 ---
-name: jobcan-request-leave
+name: request-leave
 description: File leave in Jobcan and do what the user's company expects around it — announce it in the team's chat channel following the channel's own rules, and block the time on the user's calendar — with one preview and one confirmation. Use when the user asks to take, request, file or submit leave, a day off, a half day, hourly leave, or time off on given dates.
 ---
 
-# jobcan-request-leave
+# jobcan:request-leave
 
 Turns "I'm off on the 6th" into a Jobcan request, a channel post, and a calendar block, in that
 order, with a single preview before anything is sent. Company-specific details never live in this
@@ -13,7 +13,7 @@ skill: they come from the user's preset.
 
 - The `jobcan` MCP server (tools `jobcan_*`), started with writes enabled.
 - The user's preset at `~/.config/jobcan-agent/preset.md`. Read it first. If it is missing, stop and
-  run `jobcan-setup` (or ask the user for the channel and its rules) before doing anything else.
+  run `jobcan:setup` (or ask the user for the channel and its rules) before doing anything else.
 - Chat and calendar connectors as available. A missing connector skips its step with a one-line
   note; it never blocks the Jobcan request.
 
@@ -49,7 +49,7 @@ skill: they come from the user's preset.
   preview, nothing else.
 - Sudden absences: the preset may say to post first and file in Jobcan within a deadline. Follow
   it, and say when the Jobcan step is due.
-- Changes and cancellations are `jobcan-cancel-leave`, not this skill.
+- Changes and cancellations are `jobcan:cancel-leave`, not this skill.
 - Never invent a reason silently: when Jobcan needs one and the user gave none, the tool reuses the
   user's usual one and marks it; say so in the preview.
 - Do not post to any channel or calendar not named in the preset.

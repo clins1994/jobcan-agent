@@ -1,13 +1,13 @@
 ---
-name: jobcan-cancel-leave
+name: cancel-leave
 description: Cancel or change leave already filed in Jobcan, and undo or update what was announced for it — the chat post's thread and the calendar block — with one preview and one confirmation. Use when the user wants to cancel, withdraw, drop, move or change a day off, half day or leave request.
 ---
 
-# jobcan-cancel-leave
+# jobcan:cancel-leave
 
 ## Needs
 
-The same as `jobcan-request-leave`: the `jobcan` MCP server with writes enabled, the preset at
+The same as `jobcan:request-leave`: the `jobcan` MCP server with writes enabled, the preset at
 `~/.config/jobcan-agent/preset.md`, and whatever chat and calendar connectors exist.
 
 ## Procedure

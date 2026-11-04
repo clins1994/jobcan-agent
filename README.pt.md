@@ -41,6 +41,42 @@ Requisitos: macOS (as credenciais são lidas do Keychain), Node.js 20 ou mais re
 Jobcan que entre com e-mail e senha. SSO e verificação em duas etapas são detectados e param com
 uma mensagem; ainda não têm suporte.
 
+### Plugin do Claude Code
+
+O repositório é um plugin do Claude Code chamado `jobcan`. Ele traz as skills e inicia o servidor
+MCP a partir de um arquivo empacotado, então não é preciso clonar nem compilar nada.
+
+1. Adicione um marketplace que liste o plugin, por exemplo `clins1994/skills-pack`, e instale o
+   plugin. `<marketplace>` é o nome que `claude plugin marketplace add` mostra:
+
+   ```bash
+   claude plugin marketplace add clins1994/skills-pack
+   claude plugin install jobcan@<marketplace>
+   ```
+
+2. Guarde a sua senha do Jobcan no Keychain. O comando pede a senha:
+
+   ```bash
+   security add-generic-password -s jobcan-mcp -a voce@exemplo.com -w
+   ```
+
+3. Copie [`preset.example.md`](preset.example.md) para `~/.config/jobcan-agent/preset.md` e
+   preencha com o seu canal, as regras dele e o seu dia habitual.
+4. Ative os conectores que o seu preset usa (Slack ou Teams, Google Agenda ou Outlook). Um conector
+   ausente pula aquela etapa. Nunca bloqueia a solicitação no Jobcan.
+
+Depois, numa sessão nova: "qual é o meu saldo de férias", "quero folga na próxima sexta" ou
+"preencha outubro". As skills também existem como `/jobcan:request-leave`, `/jobcan:cancel-leave` e
+`/jobcan:backfill`. O plugin inicia o servidor com escritas permitidas, e toda escrita continua
+sendo uma simulação até você confirmar o plano.
+
+Para outros agentes que leem skills, `npx skills add clins1994/jobcan-agent` instala as mesmas
+pastas de `skills/`. Registre o servidor MCP como descrito abaixo.
+
+### A partir de um checkout
+
+Use isto para desenvolvimento, ou para um agente que não seja o Claude Code.
+
 ```bash
 git clone https://github.com/clins1994/jobcan-agent.git
 cd jobcan-agent
@@ -59,23 +95,11 @@ claude mcp add jobcan -e JOBCAN_ALLOW_WRITES=1 -- node "$PWD/packages/mcp/dist/i
 No Claude Desktop, adicione `{"command": "node", "args": ["<repo>/packages/mcp/dist/index.js"],
 "env": {"JOBCAN_ALLOW_WRITES": "1"}}` em `mcpServers.jobcan`.
 
-Experimente: "qual é o meu saldo de férias", depois "planeje uma folga na próxima sexta", e confirme.
+Para as skills, copie o preset como no passo 3 acima e faça um link das skills em `~/.claude/skills/`:
 
-Isso basta para as ferramentas do Jobcan. Para as skills, que acrescentam as etapas de chat e agenda:
-
-1. Copie [`preset.example.md`](preset.example.md) para `~/.config/jobcan-agent/preset.md` e
-   preencha com o seu canal, as regras dele e o seu dia habitual.
-2. Deixe as skills visíveis para o seu agente. No Claude Code, faça um link ou copie para
-   `~/.claude/skills/`:
-
-   ```bash
-   for s in skills/*/; do ln -s "$PWD/$s" ~/.claude/skills/; done
-   ```
-
-3. Ative no agente os conectores que o seu preset usa (Slack ou Teams, Google Agenda ou Outlook).
-   Um conector ausente pula aquela etapa; nunca bloqueia a solicitação no Jobcan.
-
-Depois, numa sessão nova: "quero folga na próxima sexta" ou "preencha o mês passado".
+```bash
+for s in skills/*/; do ln -s "$PWD/$s" ~/.claude/skills/; done
+```
 
 ## O que já foi testado
 
@@ -91,9 +115,9 @@ construído. Funcionou de ponta a ponta ao menos uma vez; não está provado par
   por horas pendente por um dia inteiro.
 - Ponto: um mês inteiro de entradas e saídas (15 dias, 30 registros), contornando folgas por horas.
   Uma segunda execução não registra nada em dobro enquanto a primeira aguarda aprovação.
-- A skill `jobcan-request-leave`, conduzida passo a passo: solicitar; postar no canal conforme as
+- A skill `jobcan:request-leave`, conduzida passo a passo: solicitar; postar no canal conforme as
   regras dele e reagir; criar o evento de ausência. O procedimento de fim de mês que virou
-  `jobcan-backfill`, conduzido do mesmo jeito: conciliar o canal, a agenda e o Jobcan; solicitar as
+  `jobcan:backfill`, conduzido do mesmo jeito: conciliar o canal, a agenda e o Jobcan; solicitar as
   folgas que faltavam; preencher o ponto.
 - 427 testes unitários contra fakes do cliente e das páginas do Jobcan, e `npm run verify` contra o
   sistema real.
@@ -104,8 +128,8 @@ construído. Funcionou de ponta a ponta ao menos uma vez; não está provado par
   pedir para ser configurado, sem ajuda do autor.
 - **Uma sessão nova** com o servidor registrado e as skills linkadas: chamar uma skill pelo nome,
   ou apenas dizer "quero folga na próxima sexta" ou "preencha o mês passado". Até aqui o autor
-  conduziu as skills à mão, e `jobcan-backfill` nunca rodou como skill.
-- **`jobcan-setup`**, o construtor interativo de preset. Ainda não existe; presets são escritos à
+  conduziu as skills à mão, e `jobcan:backfill` nunca rodou como skill.
+- **`jobcan:setup`**, o construtor interativo de preset. Ainda não existe; presets são escritos à
   mão. Deve perguntar sobre o seu fluxo (só chat, só agenda, chat primeiro e Jobcan depois, o seu
   horário habitual) e escrever o preset por você.
 - **Outros fluxos**: só agenda, só chat, chat primeiro; Teams e Outlook (há notas de referência,

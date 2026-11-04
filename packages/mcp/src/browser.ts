@@ -1,4 +1,4 @@
-import { chromium, type BrowserContext, type Page } from "playwright";
+import type { BrowserContext, Page } from "playwright";
 import { HEADLESS, PROFILE_DIR, SELECTORS, URLS } from "./config.js";
 import { getCredentials } from "./credentials.js";
 
@@ -19,9 +19,23 @@ export function withPage<T>(fn: (page: Page) => Promise<T>): Promise<T> {
   return next;
 }
 
+/**
+ * Playwright is imported here, on first use, so the bundled server starts without it.
+ * The plugin bundle leaves it out: only a development checkout has it installed.
+ */
+async function loadPlaywright(): Promise<typeof import("playwright")> {
+  try {
+    return await import("playwright");
+  } catch {
+    throw new Error(
+      "This tool needs Playwright, which only a development checkout has (run it from packages/mcp/dist after npm install).",
+    );
+  }
+}
+
 async function getPage(): Promise<Page> {
   // Persistent profile = cookies survive restarts, so we rarely re-login.
-  ctx ??= await chromium.launchPersistentContext(PROFILE_DIR, { headless: HEADLESS, locale: "ja-JP" });
+  ctx ??= await (await loadPlaywright()).chromium.launchPersistentContext(PROFILE_DIR, { headless: HEADLESS, locale: "ja-JP" });
   return ctx.pages()[0] ?? ctx.newPage();
 }
 

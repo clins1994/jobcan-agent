@@ -21,6 +21,7 @@ Writes run only when the server is started with `JOBCAN_ALLOW_WRITES=1`, and eac
 | `jobcan_replace_leave` | Withdraws a pending request and files another in its place, e.g. half day → full day. Write. |
 | `jobcan_get_timesheet` | One month of attendance |
 | `jobcan_list_attendance_spots` | The company's clock-in spots |
+| `jobcan_request_holiday_work` | Files work on a non-workday, with the substitute day off in the same request. Write. |
 | `jobcan_record_attendance` | Fills clock times for worked days never clocked; works around hourly leave. Write. |
 | `jobcan_discover_forms` | The leave form as the company configured it, with a fingerprint |
 | `jobcan_inspect_page` | Dev helper: dumps a page's forms and links through a headless browser (needs Playwright's browser) |

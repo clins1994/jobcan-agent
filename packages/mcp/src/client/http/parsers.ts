@@ -1,7 +1,7 @@
 import { parse, type HTMLElement } from "node-html-parser";
 import { fromParts, isPlainDate, type PlainDate } from "../../domain/dates.js";
 import { defineForm, type FormField, type FormSchema, type TimePartsField } from "../../domain/forms.js";
-import type { LeaveCategory, LeaveRequestStatus, LeaveType, LeaveUnit, TimesheetDay } from "../../domain/types.js";
+import type { HolidayCompensation, HolidayWorkRequest, LeaveCategory, LeaveRequestStatus, LeaveType, LeaveUnit, TimesheetDay } from "../../domain/types.js";
 
 /**
  * HTML in, plain data out. Pages are expected in English (the session pins the UI
@@ -341,9 +341,9 @@ export function pageErrors(root: HTMLElement): string[] {
 }
 
 /** The review step either returns the save form or the request form again with errors. */
-export function parseReviewPage(html: string): ReviewPage | { errors: string[] } {
+export function parseReviewPage(html: string, saveAction = "/holiday/save"): ReviewPage | { errors: string[] } {
   const root = parse(html);
-  const form = root.querySelectorAll("form").find((f) => (f.getAttribute("action") ?? "").includes("/holiday/save"));
+  const form = root.querySelectorAll("form").find((f) => (f.getAttribute("action") ?? "").includes(saveAction));
   if (!form) {
     const errors = pageErrors(root).filter((e) => !/\(required|\(if any/i.test(e));
     return { errors: errors.length > 0 ? errors : ["Jobcan did not accept the request and gave no reason"] };
@@ -440,6 +440,67 @@ export function parseLeaveListPage(html: string): LeaveListRow[] {
       ...(datesIn(text(4))[0] ? { requestedOn: datesIn(text(4))[0] } : {}),
       ...(amount ? { days: Number(amount[1]) } : length !== undefined && length > 0 ? { minutes: length, time: { start: span![1]!, end: span![2]! } } : {}),
       ...(text(6) ? { reason: text(6) } : {}),
+    });
+  }
+  return rows;
+}
+
+// --- holiday work ----------------------------------------------------------------
+
+export interface HolidayWorkFormPage {
+  /** Hidden fields the form posts back (token, employee id). */
+  hidden: Record<string, string>;
+  /** Value of the compensation select for each kind this company offers. */
+  compensationValues: Partial<Record<HolidayCompensation, string>>;
+}
+
+export function parseHolidayWorkFormPage(html: string): HolidayWorkFormPage {
+  const root = parse(html);
+  const form = root.querySelectorAll("form").find((f) => (f.getAttribute("action") ?? "").includes("/holidayworking/confirm"));
+  if (!form) throw new ParseError("holiday work form", "the page has no request form");
+  const hidden: Record<string, string> = {};
+  for (const input of form.querySelectorAll('input[type="hidden"]')) {
+    const name = input.getAttribute("name");
+    if (name) hidden[name] = input.getAttribute("value") ?? "";
+  }
+  const compensationValues: HolidayWorkFormPage["compensationValues"] = {};
+  for (const option of form.querySelectorAll('select[name="holiday_type"] option')) {
+    const value = option.getAttribute("value") ?? "";
+    if (value === "substitute" || value === "compensatory") compensationValues[value] = value;
+    else compensationValues.none = value;
+  }
+  return { hidden, compensationValues };
+}
+
+const HOLIDAY_WORK_COLUMNS = 5;
+
+function compensationOf(text: string): HolidayCompensation {
+  if (/substitut|振替|振休/i.test(text)) return "substitute";
+  if (/compensatory|代休/i.test(text)) return "compensatory";
+  return "none";
+}
+
+/** Columns: request number, holiday work date, vacation type, status, reason. */
+export function parseHolidayWorkListPage(html: string): HolidayWorkRequest[] {
+  const rows: HolidayWorkRequest[] = [];
+  for (const row of parse(html).querySelectorAll("table tbody tr")) {
+    const cells = row.querySelectorAll("td").filter((td) => td.parentNode === row);
+    if (cells.length === 0) continue;
+    if (cells.length !== HOLIDAY_WORK_COLUMNS) {
+      throw new ParseError("holiday work list", `a request has ${cells.length} columns, expected ${HOLIDAY_WORK_COLUMNS}`);
+    }
+    const text = (i: number) => clean(cells[i]!.text);
+    const id = /(\d+)/.exec(text(0))?.[1];
+    const workDate = datesIn(text(1))[0];
+    if (!id || !workDate) throw new ParseError("holiday work list", `a request has no readable number or date: ${text(0)}`);
+    const holidayDate = datesIn(text(2))[0] ?? datesIn(text(1))[1];
+    rows.push({
+      id,
+      workDate,
+      compensation: compensationOf(text(2)),
+      ...(holidayDate ? { holidayDate } : {}),
+      status: statusOf(text(3)),
+      ...(text(4) ? { reason: text(4) } : {}),
     });
   }
   return rows;

@@ -59,6 +59,28 @@ export interface LeaveRequest {
   requestedOn?: PlainDate;
 }
 
+/** How a day worked on a holiday is paid back. */
+export type HolidayCompensation = "substitute" | "compensatory" | "none";
+
+export interface HolidayWorkRequest {
+  id: string;
+  /** The holiday to work, or that was worked. */
+  workDate: PlainDate;
+  compensation: HolidayCompensation;
+  /** The day off taken in exchange, when one was named. */
+  holidayDate?: PlainDate;
+  status: LeaveRequestStatus;
+  reason?: string;
+}
+
+export interface HolidayWorkSubmission {
+  workDate: PlainDate;
+  compensation: HolidayCompensation;
+  /** Substitute days only. */
+  holidayDate?: PlainDate;
+  reason: string;
+}
+
 /** One day of leave to file. Ranges are expanded before they reach the client. */
 export interface LeaveSubmission {
   leaveTypeId: string;

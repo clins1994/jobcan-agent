@@ -22,6 +22,14 @@ export interface HolidayState {
   reason: string;
 }
 
+export interface HolidayWorkRow {
+  id: string;
+  date: string;
+  type: string;
+  status: string;
+  reason: string;
+}
+
 export interface FakeServerOptions {
   email?: string;
   password?: string;
@@ -34,6 +42,10 @@ export interface FakeServerOptions {
   /** Where Jobcan sends the browser after a write; defaults to pages the client reads. */
   afterSave?: string;
   afterDelete?: string;
+  /** Rows of the holiday work list. Turns on /employee/holidayworking/ and its write endpoints. */
+  holidayWork?: HolidayWorkRow[];
+  /** Make the holiday work review step refuse with these errors. */
+  refuseHolidayWorkWith?: string[];
   /** Turns on the clock-edit page and the punch endpoint. Called for every accepted record. */
   onPunch?: (date: string, time: string, note: string, spot: string) => void;
   spots?: [string, string][];
@@ -162,6 +174,42 @@ export function fakeServer(options: FakeServerOptions = {}) {
     return undefined;
   };
 
+  const holidayWork = structuredClone(options.holidayWork ?? []);
+  const holidayWorkPages = (url: URL, method: string, body: string): Response | undefined => {
+    if (!options.holidayWork) return undefined;
+    const path = url.pathname.replace(/\/$/, "");
+    if (path === "/employee/holidayworking" && method === "GET") {
+      const rows = holidayWork
+        .map((r) => `<tr><td><a href="/employee/holidayworking/info/?id=${r.id}">${r.id}</a></td><td>${r.date}</td><td>${r.type}</td><td>${r.status}</td><td>${r.reason}</td></tr>`)
+        .join("");
+      return html(`<html><body><div class="jbc-container"><table><thead><tr><th>Request No.</th><th>Scheduled Holiday Work Date</th><th>Vacation Type</th><th>Approve/Reject</th><th>Reason for Holiday Work</th></tr></thead><tbody>${rows}</tbody></table></div></body></html>`);
+    }
+    if (path === "/employee/holidayworking/new" && method === "GET") {
+      return html(`<html><body><div class="jbc-container"><form action="/employee/holidayworking/confirm" method="post"><input type="hidden" name="token" value="hw-token"><input type="hidden" name="employee_id" value="7">
+        <select name="holiday_type"><option value="NaN">(Holiday Work Request Only)</option><option value="compensatory">Compensatory Day Off</option><option value="substitute">Substitution holiday</option></select>
+        <input type="checkbox" name="useFlg" value="1"><textarea name="description"></textarea></form></div></body></html>`);
+    }
+    if (path === "/employee/holidayworking/confirm" && method === "POST") {
+      const form = new URLSearchParams(body);
+      const errors = [...(options.refuseHolidayWorkWith ?? [])];
+      if (form.get("token") !== "hw-token") errors.push("Invalid token.");
+      if (errors.length > 0) return html(`<html><body><div class="jbc-container">${errors.map((e) => `<div class="alert alert-danger">${e}</div>`).join("")}</div></body></html>`);
+      const hidden = [...form.entries()].map(([k, v]) => `<input type="hidden" name="${k}" value="${v}" />`).join("");
+      return html(`<html><body><div class="jbc-container"><form id="form1" method="post" action="/employee/holidayworking/save">${hidden}<input type="button" value="Request"></form></div></body></html>`);
+    }
+    if (path === "/employee/holidayworking/save" && method === "POST") {
+      const form = new URLSearchParams(body);
+      const part = (p: string) => form.get(p)!.padStart(2, "0");
+      const date = `${part("holidayworking_month")}/${part("holidayworking_day")}/${form.get("holidayworking_year")}`;
+      const off = form.get("useFlg") ? ` ${part("holiday_month")}/${part("holiday_day")}/${form.get("holiday_year")}` : "";
+      const type = form.get("holiday_type") === "substitute" ? "Substitution holiday" : "Compensatory Day Off";
+      holidayWork.unshift({ id: String(Math.max(0, ...holidayWork.map((r) => Number(r.id))) + 1), date, type: `${type}${off}`, status: "Waiting for Approval", reason: form.get("description") ?? "" });
+      return redirect("/employee/holidayworking/finish");
+    }
+    if (path === "/employee/holidayworking/finish") return html(`<html><body><div class="jbc-container"><h1>Request completed</h1></div></body></html>`);
+    return undefined;
+  };
+
   const fetch = (async (input: string | URL | Request, init?: RequestInit) => {
     const url = new URL(String(input));
     const method = init?.method ?? "GET";
@@ -205,7 +253,8 @@ export function fakeServer(options: FakeServerOptions = {}) {
       }
       if (!has("sid")) return redirect(options.signedOutRedirect ?? "https://id.jobcan.jp/users/sign_in?app_key=atd");
       if (url.pathname === "/employee") return html(employeeHome);
-      const written = holidayWrite(url, method, typeof init?.body === "string" ? init.body : "", cookies) ?? clockEdit(url, method, typeof init?.body === "string" ? init.body : "");
+      const sent = typeof init?.body === "string" ? init.body : "";
+      const written = holidayWrite(url, method, sent, cookies) ?? clockEdit(url, method, sent) ?? holidayWorkPages(url, method, sent);
       if (written) return written;
       const page = options.pages?.[url.pathname];
       if (page !== undefined) return html(typeof page === "function" ? page(url.searchParams) : page);

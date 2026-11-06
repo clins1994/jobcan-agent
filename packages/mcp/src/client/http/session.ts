@@ -19,6 +19,8 @@ const READABLE: Record<string, RegExp[]> = {
     /^\/employee\/attendance\/?$/,
     /^\/employee\/holiday\/?$/,
     /^\/employee\/holiday\/(new|info|delete-confirm|finish|delete-finish)\/?$/,
+    /^\/employee\/holidayworking\/?$/,
+    /^\/employee\/holidayworking\/(new|info|finish)\/?$/,
     /^\/employee\/adit\/modify\/?$/,
     // scripts and translations the pages load
     /^\/st\/(js|locales)\/[\w./-]+\.(js|json)$/,
@@ -29,13 +31,15 @@ const READABLE: Record<string, RegExp[]> = {
 const ALLOWED_POSTS = new Set([SIGN_IN_URL]);
 
 /**
- * What a session with writes enabled may do on top: file leave (review, then save) and
- * withdraw a pending request (a GET, as Jobcan made it). Nothing else, ever.
+ * What a session with writes enabled may do on top: file leave or holiday work (review,
+ * then save) and withdraw a pending leave request (a GET, as Jobcan made it). Nothing else, ever.
  */
 const WRITE_GETS = [/^\/employee\/holiday\/delete\/?$/];
 const WRITE_POSTS = new Set([
   `${ATTENDANCE_ORIGIN}/employee/holiday/confirm`,
   `${ATTENDANCE_ORIGIN}/employee/holiday/save`,
+  `${ATTENDANCE_ORIGIN}/employee/holidayworking/confirm`,
+  `${ATTENDANCE_ORIGIN}/employee/holidayworking/save`,
   `${ATTENDANCE_ORIGIN}/employee/adit/insert/`,
 ]);
 

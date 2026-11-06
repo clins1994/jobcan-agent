@@ -38324,6 +38324,8 @@ var READABLE = {
     /^\/employee\/attendance\/?$/,
     /^\/employee\/holiday\/?$/,
     /^\/employee\/holiday\/(new|info|delete-confirm|finish|delete-finish)\/?$/,
+    /^\/employee\/holidayworking\/?$/,
+    /^\/employee\/holidayworking\/(new|info|finish)\/?$/,
     /^\/employee\/adit\/modify\/?$/,
     // scripts and translations the pages load
     /^\/st\/(js|locales)\/[\w./-]+\.(js|json)$/
@@ -38334,6 +38336,8 @@ var WRITE_GETS = [/^\/employee\/holiday\/delete\/?$/];
 var WRITE_POSTS = /* @__PURE__ */ new Set([
   `${ATTENDANCE_ORIGIN}/employee/holiday/confirm`,
   `${ATTENDANCE_ORIGIN}/employee/holiday/save`,
+  `${ATTENDANCE_ORIGIN}/employee/holidayworking/confirm`,
+  `${ATTENDANCE_ORIGIN}/employee/holidayworking/save`,
   `${ATTENDANCE_ORIGIN}/employee/adit/insert/`
 ]);
 var MAX_REDIRECTS = 10;
@@ -38803,9 +38807,9 @@ function parseRecordResult(body) {
 function pageErrors(root) {
   return [...new Set(root.querySelectorAll(".jbc-text-danger, .invalid-feedback, .alert-danger, .alert").map((el) => clean(el.text)).filter(Boolean))];
 }
-function parseReviewPage(html) {
+function parseReviewPage(html, saveAction = "/holiday/save") {
   const root = parse3(html);
-  const form = root.querySelectorAll("form").find((f) => (f.getAttribute("action") ?? "").includes("/holiday/save"));
+  const form = root.querySelectorAll("form").find((f) => (f.getAttribute("action") ?? "").includes(saveAction));
   if (!form) {
     const errors = pageErrors(root).filter((e) => !/\(required|\(if any/i.test(e));
     return { errors: errors.length > 0 ? errors : ["Jobcan did not accept the request and gave no reason"] };
@@ -38873,6 +38877,53 @@ function parseLeaveListPage(html) {
       ...datesIn(text(4))[0] ? { requestedOn: datesIn(text(4))[0] } : {},
       ...amount ? { days: Number(amount[1]) } : length !== void 0 && length > 0 ? { minutes: length, time: { start: span[1], end: span[2] } } : {},
       ...text(6) ? { reason: text(6) } : {}
+    });
+  }
+  return rows;
+}
+function parseHolidayWorkFormPage(html) {
+  const root = parse3(html);
+  const form = root.querySelectorAll("form").find((f) => (f.getAttribute("action") ?? "").includes("/holidayworking/confirm"));
+  if (!form) throw new ParseError("holiday work form", "the page has no request form");
+  const hidden = {};
+  for (const input of form.querySelectorAll('input[type="hidden"]')) {
+    const name = input.getAttribute("name");
+    if (name) hidden[name] = input.getAttribute("value") ?? "";
+  }
+  const compensationValues = {};
+  for (const option of form.querySelectorAll('select[name="holiday_type"] option')) {
+    const value = option.getAttribute("value") ?? "";
+    if (value === "substitute" || value === "compensatory") compensationValues[value] = value;
+    else compensationValues.none = value;
+  }
+  return { hidden, compensationValues };
+}
+var HOLIDAY_WORK_COLUMNS = 5;
+function compensationOf(text) {
+  if (/substitut|振替|振休/i.test(text)) return "substitute";
+  if (/compensatory|代休/i.test(text)) return "compensatory";
+  return "none";
+}
+function parseHolidayWorkListPage(html) {
+  const rows = [];
+  for (const row of parse3(html).querySelectorAll("table tbody tr")) {
+    const cells = row.querySelectorAll("td").filter((td) => td.parentNode === row);
+    if (cells.length === 0) continue;
+    if (cells.length !== HOLIDAY_WORK_COLUMNS) {
+      throw new ParseError("holiday work list", `a request has ${cells.length} columns, expected ${HOLIDAY_WORK_COLUMNS}`);
+    }
+    const text = (i) => clean(cells[i].text);
+    const id = /(\d+)/.exec(text(0))?.[1];
+    const workDate = datesIn(text(1))[0];
+    if (!id || !workDate) throw new ParseError("holiday work list", `a request has no readable number or date: ${text(0)}`);
+    const holidayDate = datesIn(text(2))[0] ?? datesIn(text(1))[1];
+    rows.push({
+      id,
+      workDate,
+      compensation: compensationOf(text(2)),
+      ...holidayDate ? { holidayDate } : {},
+      status: statusOf(text(3)),
+      ...text(4) ? { reason: text(4) } : {}
     });
   }
   return rows;
@@ -39010,6 +39061,11 @@ var HttpJobcanClient = class {
   async getLeaveRequest(id) {
     return (await this.listLeaveRequests()).find((r) => r.id === id);
   }
+  async listHolidayWorkRequests(range) {
+    const today = await this.getToday();
+    const window = range ?? { from: addDays(today, -LIST_DAYS_BACK), to: addDays(today, LIST_DAYS_AHEAD) };
+    return parseHolidayWorkListPage((await this.page(`/employee/holidayworking/?${termQuery(window)}`)).body);
+  }
   // --- writes ---
   assertWrites(method) {
     if (!this.session.allowWrites) throw new WriteBlockedError(method);
@@ -39049,6 +39105,43 @@ var HttpJobcanClient = class {
       }
       const filed = (await this.listLeaveRequests({ from: submission.date, to: submission.date })).filter((r) => r.from === submission.date && r.leaveTypeId === submission.leaveTypeId && r.status === "pending").sort((a, b) => Number(b.id) - Number(a.id))[0];
       if (!filed) throw new Error(`Jobcan confirmed the request for ${submission.date}, but it is not in the list yet`);
+      return filed;
+    });
+  }
+  /**
+   * Files holiday work the way the browser does, in the same two steps as leave. One
+   * request carries both the day worked and, for a substitute, the day off in exchange.
+   */
+  async submitHolidayWorkRequest(submission) {
+    return this.write("submitHolidayWorkRequest", async () => {
+      const newPage = `${ATTENDANCE_ORIGIN}/employee/holidayworking/new`;
+      const form = parseHolidayWorkFormPage((await this.page("/employee/holidayworking/new")).body);
+      const type = form.compensationValues[submission.compensation];
+      if (type === void 0) throw new JobcanRejection([`This Jobcan offers no "${submission.compensation}" option for holiday work`]);
+      const work = toParts(submission.workDate);
+      const off = toParts(submission.holidayDate ?? submission.workDate);
+      const body = {
+        ...form.hidden,
+        holidayworking_year: String(work.year),
+        holidayworking_month: String(work.month),
+        holidayworking_day: String(work.day),
+        holiday_type: type,
+        ...submission.holidayDate ? { useFlg: "1" } : {},
+        holiday_year: String(off.year),
+        holiday_month: String(off.month),
+        holiday_day: String(off.day),
+        description: submission.reason
+      };
+      const review = await this.session.postForm(`${ATTENDANCE_ORIGIN}/employee/holidayworking/confirm`, body, newPage);
+      const parsed = parseReviewPage(review.body, "/holidayworking/save");
+      if ("errors" in parsed) throw new JobcanRejection(parsed.errors);
+      const saved = await this.session.postForm(`${ATTENDANCE_ORIGIN}/employee/holidayworking/save`, parsed.saveForm, review.url);
+      if (saved.unfollowedRedirect) console.error(`jobcan: saved, then not following the redirect to ${saved.unfollowedRedirect}`);
+      const filed = (await this.listHolidayWorkRequests({ from: submission.workDate, to: submission.workDate })).filter((r) => r.workDate === submission.workDate && r.status === "pending").sort((a, b) => Number(b.id) - Number(a.id))[0];
+      if (!filed) {
+        const again = parseReviewPage(saved.body, "/holidayworking/save");
+        throw new JobcanRejection("errors" in again && !/gave no reason/.test(again.errors.join()) ? again.errors : [`Jobcan ended at ${new URL(saved.url).pathname}, and the request for ${submission.workDate} is not in the list`]);
+      }
       return filed;
     });
   }
@@ -39145,26 +39238,6 @@ async function saveJar(jar, file = SESSION_FILE) {
 // src/index.ts
 init_credentials();
 
-// src/domain/balance.ts
-var roundDays = (days) => Math.round(days * 1e6) / 1e6;
-function pendingDays(requests, balanceKey) {
-  return requests.filter((r) => r.status === "pending" && r.balanceKey === balanceKey).reduce((sum, r) => roundDays(sum + r.days), 0);
-}
-function availableBalance(balance, requests) {
-  const pending = balance.pendingAlreadyDeducted ? 0 : pendingDays(requests, balance.key);
-  return {
-    key: balance.key,
-    label: balance.label,
-    category: balance.category,
-    remaining: balance.remainingDays,
-    pending,
-    available: roundDays(balance.remainingDays - pending)
-  };
-}
-function availableBalances(balances, requests) {
-  return balances.map((b) => availableBalance(b, requests));
-}
-
 // src/domain/holidays.ts
 var import_holiday_jp = __toESM(require_holiday_jp(), 1);
 var NATIONAL_HOLIDAYS = import_holiday_jp.default.holidays;
@@ -39187,8 +39260,89 @@ function indexCalendar(days) {
   return new Map(days.map((d) => [d.date, d]));
 }
 
-// src/domain/attendance-plan.ts
+// src/domain/holiday-work-plan.ts
 var isActive = (r) => r.status === "pending" || r.status === "approved";
+function planHolidayWork(input, context) {
+  const calendar = indexCalendar(context.calendar);
+  const compensation = input.compensation ?? "substitute";
+  const reason = input.reason.trim();
+  const workDate = classifyDate(assertPlainDate(input.workDate), calendar.get(input.workDate));
+  const holidayDate = input.holidayDate ? classifyDate(assertPlainDate(input.holidayDate), calendar.get(input.holidayDate)) : void 0;
+  const problems = [];
+  if (workDate.isWorkday) problems.push(`${workDate.date} is a workday, so it needs no holiday work request`);
+  if (!reason) problems.push("A reason is required");
+  if (context.holidayWork.some((r) => r.workDate === workDate.date && isActive(r))) {
+    problems.push(`${workDate.date} already has a holiday work request`);
+  }
+  if (holidayDate) {
+    if (compensation !== "substitute") problems.push("Only a substitute day off can name a date");
+    if (holidayDate.date === workDate.date) problems.push("The day off and the day worked are the same day");
+    if (!holidayDate.isWorkday) problems.push(`${holidayDate.date} is not a workday, so it cannot be the day off`);
+    const taken = context.leaveRequests.find((r) => isActive(r) && r.from <= holidayDate.date && r.to >= holidayDate.date);
+    if (taken) problems.push(`${holidayDate.date} already has leave request ${taken.id}`);
+  }
+  return {
+    workDate,
+    compensation,
+    ...holidayDate ? { holidayDate } : {},
+    reason,
+    status: problems.length === 0 ? "ready" : "blocked",
+    problems
+  };
+}
+
+// src/usecases/holiday-work.ts
+async function planHolidayWorkRequest(client2, input) {
+  const dates = [input.workDate, ...input.holidayDate ? [input.holidayDate] : []].sort();
+  const span = { from: dates[0], to: dates.at(-1) };
+  const [calendar, leaveRequests, holidayWork] = await Promise.all([
+    client2.getCalendar(span),
+    client2.listLeaveRequests(span),
+    client2.listHolidayWorkRequests({ from: input.workDate, to: input.workDate })
+  ]);
+  return planHolidayWork(input, { calendar, leaveRequests, holidayWork });
+}
+async function requestHolidayWork(client2, input) {
+  const { confirm, ...planInput } = input;
+  const plan = await planHolidayWorkRequest(client2, planInput);
+  if (confirm !== true) return { mode: "dry_run", plan };
+  if (plan.status !== "ready") return { mode: "blocked", plan };
+  try {
+    const filed = await client2.submitHolidayWorkRequest({
+      workDate: plan.workDate.date,
+      compensation: plan.compensation,
+      ...plan.holidayDate ? { holidayDate: plan.holidayDate.date } : {},
+      reason: plan.reason
+    });
+    return { mode: "submitted", plan, filed };
+  } catch (err) {
+    if (err instanceof JobcanRejection) return { mode: "refused", plan, messages: err.messages };
+    throw err;
+  }
+}
+
+// src/domain/balance.ts
+var roundDays = (days) => Math.round(days * 1e6) / 1e6;
+function pendingDays(requests, balanceKey) {
+  return requests.filter((r) => r.status === "pending" && r.balanceKey === balanceKey).reduce((sum, r) => roundDays(sum + r.days), 0);
+}
+function availableBalance(balance, requests) {
+  const pending = balance.pendingAlreadyDeducted ? 0 : pendingDays(requests, balance.key);
+  return {
+    key: balance.key,
+    label: balance.label,
+    category: balance.category,
+    remaining: balance.remainingDays,
+    pending,
+    available: roundDays(balance.remainingDays - pending)
+  };
+}
+function availableBalances(balances, requests) {
+  return balances.map((b) => availableBalance(b, requests));
+}
+
+// src/domain/attendance-plan.ts
+var isActive2 = (r) => r.status === "pending" || r.status === "approved";
 var fmt = (minutes2) => `${String(Math.floor(minutes2 / 60)).padStart(2, "0")}:${String(minutes2 % 60).padStart(2, "0")}`;
 function collectDates(input) {
   const all = [
@@ -39274,7 +39428,7 @@ function planAttendance(input, ctx2) {
       days.push(skip("pending_approval"));
       continue;
     }
-    const leaves = ctx2.requests.filter((r) => isActive(r) && rangeContains(r, date3));
+    const leaves = ctx2.requests.filter((r) => isActive2(r) && rangeContains(r, date3));
     const fullDay = leaves.find((r) => r.unit === "full_day" || r.unit === "partial_day");
     if (fullDay) {
       days.push(skip("full_day_leave", fullDay.id));
@@ -39341,10 +39495,10 @@ function timesOverlap(a, b) {
   if ([aStart, aEnd, bStart, bEnd].some((m) => m === void 0)) return true;
   return aStart < bEnd && bStart < aEnd;
 }
-var isActive2 = (r) => r.status === "pending" || r.status === "approved";
+var isActive3 = (r) => r.status === "pending" || r.status === "approved";
 function findConflict(requests, date3, unit, time3) {
   return requests.find((r) => {
-    if (!isActive2(r) || !rangeContains(r, date3)) return false;
+    if (!isActive3(r) || !rangeContains(r, date3)) return false;
     if (r.unit === "hourly" && unit === "hourly") return !r.time || !time3 || timesOverlap(r.time, time3);
     return unitsConflict(r.unit, unit);
   });
@@ -39789,6 +39943,28 @@ server.registerTool(
           confirm: confirm === true
         })
       );
+    } catch (e) {
+      return fail(e);
+    }
+  }
+);
+server.registerTool(
+  "jobcan_request_holiday_work",
+  {
+    title: "Request holiday work",
+    description: "Plans a request to work on a non-workday (a weekend or holiday), or to record that the user did, and files it only when `confirm` is true. For a substitute day off, name it in `holiday_date`: one request covers both days, so do not also file the leave with jobcan_request_leave. Always call without `confirm` first and show the user the plan. If `status` is `blocked`, show `problems` and change nothing until the user decides. An approver has to accept the request; only then can clock times be recorded for that day. Only pass `confirm: true` after the user has approved that exact plan.",
+    inputSchema: {
+      work_date: DATE.describe("The non-workday worked, YYYY-MM-DD. Past dates are allowed."),
+      compensation: external_exports.enum(["substitute", "compensatory", "none"]).optional().describe("How it is paid back; `substitute` when left out"),
+      holiday_date: DATE.optional().describe("Substitute only: the workday taken off in exchange, YYYY-MM-DD"),
+      reason: external_exports.string().max(500).describe("Reason for the holiday work, as the user gave it"),
+      confirm: external_exports.boolean().optional().describe("true = file the plan. Anything else is a dry run.")
+    },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true }
+  },
+  async ({ work_date, compensation, holiday_date, reason, confirm }) => {
+    try {
+      return ok(await requestHolidayWork(await client(), { workDate: work_date, compensation, holidayDate: holiday_date, reason, confirm: confirm === true }));
     } catch (e) {
       return fail(e);
     }

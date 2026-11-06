@@ -15,6 +15,8 @@ import type { CalendarDay } from "../../domain/holidays.js";
 import type {
   AttendanceRecord,
   AttendanceSpot,
+  HolidayWorkRequest,
+  HolidayWorkSubmission,
   LeaveBalance,
   LeaveRequest,
   LeaveSubmission,
@@ -27,6 +29,8 @@ import { isEmployeePage, login, type Credentials, type LoginResult } from "./log
 import {
   parseAttendancePage,
   parseClockEditPage,
+  parseHolidayWorkFormPage,
+  parseHolidayWorkListPage,
   parseLeaveFormPage,
   parseLeaveListPage,
   parseRecordResult,
@@ -205,6 +209,12 @@ export class HttpJobcanClient implements JobcanClient {
     return (await this.listLeaveRequests()).find((r) => r.id === id);
   }
 
+  async listHolidayWorkRequests(range?: DateRange): Promise<HolidayWorkRequest[]> {
+    const today = await this.getToday();
+    const window = range ?? { from: addDays(today, -LIST_DAYS_BACK), to: addDays(today, LIST_DAYS_AHEAD) };
+    return parseHolidayWorkListPage((await this.page(`/employee/holidayworking/?${termQuery(window)}`)).body);
+  }
+
   // --- writes ---
 
   private assertWrites(method: WriteMethod): void {
@@ -251,6 +261,50 @@ export class HttpJobcanClient implements JobcanClient {
         .filter((r) => r.from === submission.date && r.leaveTypeId === submission.leaveTypeId && r.status === "pending")
         .sort((a, b) => Number(b.id) - Number(a.id))[0];
       if (!filed) throw new Error(`Jobcan confirmed the request for ${submission.date}, but it is not in the list yet`);
+      return filed;
+    });
+  }
+
+  /**
+   * Files holiday work the way the browser does, in the same two steps as leave. One
+   * request carries both the day worked and, for a substitute, the day off in exchange.
+   */
+  async submitHolidayWorkRequest(submission: HolidayWorkSubmission): Promise<HolidayWorkRequest> {
+    return this.write("submitHolidayWorkRequest", async () => {
+      const newPage = `${ATTENDANCE_ORIGIN}/employee/holidayworking/new`;
+      const form = parseHolidayWorkFormPage((await this.page("/employee/holidayworking/new")).body);
+      const type = form.compensationValues[submission.compensation];
+      if (type === undefined) throw new JobcanRejection([`This Jobcan offers no "${submission.compensation}" option for holiday work`]);
+
+      const work = toParts(submission.workDate);
+      const off = toParts(submission.holidayDate ?? submission.workDate);
+      const body = {
+        ...form.hidden,
+        holidayworking_year: String(work.year),
+        holidayworking_month: String(work.month),
+        holidayworking_day: String(work.day),
+        holiday_type: type,
+        ...(submission.holidayDate ? { useFlg: "1" } : {}),
+        holiday_year: String(off.year),
+        holiday_month: String(off.month),
+        holiday_day: String(off.day),
+        description: submission.reason,
+      };
+      const review = await this.session.postForm(`${ATTENDANCE_ORIGIN}/employee/holidayworking/confirm`, body, newPage);
+      const parsed = parseReviewPage(review.body, "/holidayworking/save");
+      if ("errors" in parsed) throw new JobcanRejection(parsed.errors);
+
+      const saved = await this.session.postForm(`${ATTENDANCE_ORIGIN}/employee/holidayworking/save`, parsed.saveForm, review.url);
+      if (saved.unfollowedRedirect) console.error(`jobcan: saved, then not following the redirect to ${saved.unfollowedRedirect}`);
+
+      // the list decides: the page Jobcan lands on after saving is not something to trust
+      const filed = (await this.listHolidayWorkRequests({ from: submission.workDate, to: submission.workDate }))
+        .filter((r) => r.workDate === submission.workDate && r.status === "pending")
+        .sort((a, b) => Number(b.id) - Number(a.id))[0];
+      if (!filed) {
+        const again = parseReviewPage(saved.body, "/holidayworking/save");
+        throw new JobcanRejection("errors" in again && !/gave no reason/.test(again.errors.join()) ? again.errors : [`Jobcan ended at ${new URL(saved.url).pathname}, and the request for ${submission.workDate} is not in the list`]);
+      }
       return filed;
     });
   }

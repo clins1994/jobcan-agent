@@ -6,6 +6,8 @@ import { findConflict } from "../domain/leave-plan.js";
 import type {
   AttendanceRecord,
   AttendanceSpot,
+  HolidayWorkRequest,
+  HolidayWorkSubmission,
   LeaveBalance,
   LeaveCategory,
   LeaveRequest,
@@ -26,6 +28,7 @@ export interface FakeClientOptions {
   /** Report balances with pending requests already taken out, as some setups may. */
   balancesDeductPending?: boolean;
   requests?: LeaveRequest[];
+  holidayWork?: HolidayWorkRequest[];
   /** Days Jobcan has calendar data for. Anything else is omitted from `getCalendar`. */
   calendar?: CalendarDay[];
   timesheet?: TimesheetDay[];
@@ -48,6 +51,7 @@ export class FakeClient implements JobcanClient {
   private readonly balances: Map<string, number>;
   private readonly balancesDeductPending: boolean;
   private readonly requests: LeaveRequest[];
+  private readonly holidayWork: HolidayWorkRequest[];
   private readonly calendar: CalendarDay[];
   private readonly timesheet: TimesheetDay[];
   private readonly spots: AttendanceSpot[];
@@ -59,6 +63,7 @@ export class FakeClient implements JobcanClient {
     this.balances = new Map(Object.entries(options.balances ?? {}));
     this.balancesDeductPending = options.balancesDeductPending ?? false;
     this.requests = structuredClone(options.requests ?? []);
+    this.holidayWork = structuredClone(options.holidayWork ?? []);
     this.calendar = structuredClone(options.calendar ?? []);
     this.timesheet = structuredClone(options.timesheet ?? []);
     this.spots = structuredClone(options.spots ?? [{ id: "1", name: "本社" }]);
@@ -95,6 +100,10 @@ export class FakeClient implements JobcanClient {
 
   async getLeaveRequest(id: string): Promise<LeaveRequest | undefined> {
     return structuredClone(this.requests.find((r) => r.id === id));
+  }
+
+  async listHolidayWorkRequests(range?: DateRange): Promise<HolidayWorkRequest[]> {
+    return structuredClone(this.holidayWork.filter((r) => !range || rangeContains(range, r.workDate)));
   }
 
   async discoverForm(requestType: FormRequestType): Promise<FormSchema> {
@@ -159,6 +168,22 @@ export class FakeClient implements JobcanClient {
     if (!request) throw new JobcanRejection([`申請 No. ${id} が見つかりません`]);
     if (request.status !== "pending") throw new JobcanRejection([`申請 No. ${id} は取り消せません (${request.status})`]);
     request.status = "cancelled";
+    return structuredClone(request);
+  }
+
+  async submitHolidayWorkRequest(submission: HolidayWorkSubmission): Promise<HolidayWorkRequest> {
+    this.writes.push({ method: "submitHolidayWorkRequest", args: structuredClone(submission) });
+    if (!submission.reason.trim()) throw new JobcanRejection(["休日出勤の理由を入力してください"]);
+    if (submission.holidayDate === submission.workDate) throw new JobcanRejection(["休暇取得希望日と休日出勤日が同じ日です"]);
+    const request: HolidayWorkRequest = {
+      id: String(Math.max(0, ...this.holidayWork.map((r) => Number(r.id))) + 1),
+      workDate: submission.workDate,
+      compensation: submission.compensation,
+      ...(submission.holidayDate ? { holidayDate: submission.holidayDate } : {}),
+      status: "pending",
+      reason: submission.reason,
+    };
+    this.holidayWork.push(request);
     return structuredClone(request);
   }
 

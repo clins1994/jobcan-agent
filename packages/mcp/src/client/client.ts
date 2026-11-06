@@ -4,6 +4,8 @@ import type { CalendarDay } from "../domain/holidays.js";
 import type {
   AttendanceRecord,
   AttendanceSpot,
+  HolidayWorkRequest,
+  HolidayWorkSubmission,
   LeaveBalance,
   LeaveRequest,
   LeaveSubmission,
@@ -28,6 +30,7 @@ export interface JobcanClient {
   getLeaveBalances(): Promise<LeaveBalance[]>;
   listLeaveRequests(range?: DateRange): Promise<LeaveRequest[]>;
   getLeaveRequest(id: string): Promise<LeaveRequest | undefined>;
+  listHolidayWorkRequests(range?: DateRange): Promise<HolidayWorkRequest[]>;
   discoverForm(requestType: FormRequestType): Promise<FormSchema>;
   getTimesheet(month: PlainMonth): Promise<TimesheetDay[]>;
   listAttendanceSpots(): Promise<AttendanceSpot[]>;
@@ -38,11 +41,12 @@ export interface JobcanClient {
 
   submitLeaveRequest(submission: LeaveSubmission): Promise<LeaveRequest>;
   cancelLeaveRequest(id: string): Promise<LeaveRequest>;
+  submitHolidayWorkRequest(submission: HolidayWorkSubmission): Promise<HolidayWorkRequest>;
   /** Adds clock times to a day and returns the day as Jobcan now shows it. */
   recordAttendance(record: AttendanceRecord): Promise<TimesheetDay>;
 }
 
-export const WRITE_METHODS = ["submitLeaveRequest", "cancelLeaveRequest", "recordAttendance"] as const satisfies readonly (keyof JobcanClient)[];
+export const WRITE_METHODS = ["submitLeaveRequest", "cancelLeaveRequest", "submitHolidayWorkRequest", "recordAttendance"] as const satisfies readonly (keyof JobcanClient)[];
 
 export type WriteMethod = (typeof WRITE_METHODS)[number];
 

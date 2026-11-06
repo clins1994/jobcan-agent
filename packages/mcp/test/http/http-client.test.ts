@@ -211,6 +211,7 @@ describe("writes", () => {
     const calls: Record<(typeof WRITE_METHODS)[number], () => Promise<unknown>> = {
       submitLeaveRequest: () => client.submitLeaveRequest({ leaveTypeId: "1", date: "2026-10-05" }),
       cancelLeaveRequest: () => client.cancelLeaveRequest("31"),
+      submitHolidayWorkRequest: () => client.submitHolidayWorkRequest({ workDate: "2026-10-03", compensation: "substitute", reason: "x" }),
       recordAttendance: () => client.recordAttendance({ date: "2026-09-28", clockIn: "10:00", note: "x" }),
     };
     for (const method of WRITE_METHODS) await expect(calls[method]()).rejects.toThrow(WriteBlockedError);
@@ -341,6 +342,62 @@ describe("writes", () => {
   it("still reads through the read-only wrapper", async () => {
     const { client } = setup();
     expect(await readOnly(client).listLeaveTypes()).toHaveLength(7);
+  });
+});
+
+describe("holiday work requests", () => {
+  const form = { workDate: "2026-10-03", compensation: "substitute", holidayDate: "2026-10-09", reason: "Release" } as const;
+
+  it("files in two steps, and reads the request back from the list", async () => {
+    const { server, client } = setup({ allowWrites: true, holidayWork: [] });
+    const filed = await client.submitHolidayWorkRequest(form);
+    expect(filed).toMatchObject({ id: "1", workDate: "2026-10-03", compensation: "substitute", holidayDate: "2026-10-09", status: "pending", reason: "Release" });
+    const posts = server.requests.filter((r) => r.method === "POST" && r.path.includes("holidayworking")).map((r) => r.path);
+    expect(posts).toEqual(["/employee/holidayworking/confirm", "/employee/holidayworking/save"]);
+    const review = new URLSearchParams(server.requests.find((r) => r.path.endsWith("/confirm"))!.body);
+    expect(Object.fromEntries(review)).toMatchObject({
+      token: "hw-token",
+      employee_id: "7",
+      holidayworking_month: "10",
+      holidayworking_day: "3",
+      holiday_type: "substitute",
+      useFlg: "1",
+      holiday_day: "9",
+    });
+  });
+
+  it("leaves the date flag out when no day off is named", async () => {
+    const { server, client } = setup({ allowWrites: true, holidayWork: [] });
+    const filed = await client.submitHolidayWorkRequest({ workDate: "2026-10-03", compensation: "none", reason: "Release" });
+    expect(filed.workDate).toBe("2026-10-03");
+    const review = new URLSearchParams(server.requests.find((r) => r.path.endsWith("/confirm"))!.body);
+    expect(review.get("holiday_type")).toBe("NaN");
+    expect(review.has("useFlg")).toBe(false);
+  });
+
+  it("reports what Jobcan refuses at the review step, and never saves", async () => {
+    const { server, client } = setup({ allowWrites: true, holidayWork: [], refuseHolidayWorkWith: ["The date is not a holiday."] });
+    await expect(client.submitHolidayWorkRequest(form)).rejects.toThrow(/not a holiday/);
+    expect(server.requests.some((r) => r.path.endsWith("/holidayworking/save"))).toBe(false);
+  });
+
+  it("is refused for a session without writes", async () => {
+    const { server, client } = setup({ holidayWork: [] });
+    await expect(client.submitHolidayWorkRequest(form)).rejects.toThrow(WriteBlockedError);
+    expect(server.requests.some((r) => r.path.includes("holidayworking"))).toBe(false);
+  });
+
+  it("lists requests, compensation included", async () => {
+    const { client } = setup({
+      holidayWork: [
+        { id: "5", date: "10/03/2026", type: "Substitution holiday 10/09/2026", status: "Approved", reason: "Release" },
+        { id: "4", date: "09/05/2026", type: "(Holiday Work Request Only)", status: "Waiting for Approval", reason: "" },
+      ],
+    });
+    expect(await client.listHolidayWorkRequests()).toEqual([
+      { id: "5", workDate: "2026-10-03", compensation: "substitute", holidayDate: "2026-10-09", status: "approved", reason: "Release" },
+      { id: "4", workDate: "2026-09-05", compensation: "none", status: "pending" },
+    ]);
   });
 });
 

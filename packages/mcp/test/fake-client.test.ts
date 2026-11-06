@@ -240,7 +240,7 @@ describe("readOnly", () => {
   });
 
   it("covers every method of the interface that is not a read", () => {
-    const reads = ["getCalendar", "listLeaveTypes", "getLeaveBalances", "listLeaveRequests", "getLeaveRequest", "discoverForm", "getTimesheet", "listAttendanceSpots", "getToday"];
+    const reads = ["getCalendar", "listLeaveTypes", "getLeaveBalances", "listLeaveRequests", "getLeaveRequest", "listHolidayWorkRequests", "discoverForm", "getTimesheet", "listAttendanceSpots", "getToday"];
     const controls = ["approve", "reject"];
     const methods = Object.getOwnPropertyNames(FakeClient.prototype).filter((m) => m !== "constructor");
     const publicMethods = methods.filter((m) => !["mustFind", "nextId", "timesheetDay", "categoryOf"].includes(m));

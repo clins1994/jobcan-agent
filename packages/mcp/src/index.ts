@@ -8,6 +8,7 @@ import { Session } from "./client/http/session.js";
 import { loadJar, saveJar } from "./client/http/session-store.js";
 import { getCredentials } from "./credentials.js";
 import { monthRange } from "./domain/dates.js";
+import { requestHolidayWork } from "./usecases/holiday-work.js";
 import { cancelLeave, checkDate, getLeaveBalance, recordAttendance, replaceLeave, requestLeave } from "./usecases/leave.js";
 
 /** Writes stay off unless the environment turns them on; every write still needs `confirm: true`. */
@@ -173,6 +174,35 @@ server.registerTool(
           confirm: confirm === true,
         }),
       );
+    } catch (e) {
+      return fail(e);
+    }
+  },
+);
+
+server.registerTool(
+  "jobcan_request_holiday_work",
+  {
+    title: "Request holiday work",
+    description:
+      "Plans a request to work on a non-workday (a weekend or holiday), or to record that the user did, and files it only " +
+      "when `confirm` is true. For a substitute day off, name it in `holiday_date`: one request covers both days, so do not " +
+      "also file the leave with jobcan_request_leave. Always call without `confirm` first and show the user the plan. " +
+      "If `status` is `blocked`, show `problems` and change nothing until the user decides. An approver has to accept the " +
+      "request; only then can clock times be recorded for that day. Only pass `confirm: true` after the user has approved " +
+      "that exact plan.",
+    inputSchema: {
+      work_date: DATE.describe("The non-workday worked, YYYY-MM-DD. Past dates are allowed."),
+      compensation: z.enum(["substitute", "compensatory", "none"]).optional().describe("How it is paid back; `substitute` when left out"),
+      holiday_date: DATE.optional().describe("Substitute only: the workday taken off in exchange, YYYY-MM-DD"),
+      reason: z.string().max(500).describe("Reason for the holiday work, as the user gave it"),
+      confirm: z.boolean().optional().describe("true = file the plan. Anything else is a dry run."),
+    },
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+  },
+  async ({ work_date, compensation, holiday_date, reason, confirm }) => {
+    try {
+      return ok(await requestHolidayWork(await client(), { workDate: work_date, compensation, holidayDate: holiday_date, reason, confirm: confirm === true }));
     } catch (e) {
       return fail(e);
     }

@@ -98,6 +98,10 @@ Leaves
 - `jobcan_list_leave_requests(month?)`: id, date, type, status
 - `jobcan_cancel_leave_request(id, confirm)`: if already approved, return a clear "contact your admin"
 
+Holiday work
+- `jobcan_request_holiday_work(work_date, compensation?, holiday_date?, reason, confirm)`: one request
+  for the day worked and, for a substitute, the day off in exchange.
+
 Attendance
 - `jobcan_get_today()`, `jobcan_punch(action)`, `jobcan_get_timesheet(month)` (flag gaps),
   `jobcan_request_correction(date, in?, out?, reason)`
@@ -176,6 +180,7 @@ Works, against one company's real Jobcan:
   in-memory fake with synthetic form fixtures. `src/client/http/`: the real client.
 - `src/client/http/session.ts` allows only listed pages: a fixed set of GETs, the sign-in POST, and,
   with `allowWrites`, exactly `POST /employee/holiday/confirm`, `POST /employee/holiday/save`,
+  `POST /employee/holidayworking/confirm`, `POST /employee/holidayworking/save`,
   `POST /employee/adit/insert/` and `GET /employee/holiday/delete/`. A redirect is never followed
   into a write; after a write, a redirect to an unlisted page is left unfollowed and the outcome is
   read from the list instead.
@@ -219,6 +224,12 @@ Verified live on 2026-09-29 and 2026-09-30.
 - Withdrawing a pending request: `/employee/holiday/delete-confirm/?applied_id=N` links to
   `GET /employee/holiday/delete/?applied_id=N&token=…` (a GET that writes), then Jobcan lands on
   `/employee/holiday/delete-finish`. Approved requests have no cancel control.
+- Holiday work: `/employee/holidayworking/new` posts `holidayworking_{year,month,day}`, `holiday_type`
+  (`NaN` = holiday work only, `compensatory`, `substitute`), `useFlg=1` with `holiday_{year,month,day}`
+  for a named substitute day, and `description`, to `POST /employee/holidayworking/confirm`. That
+  returns the save form (nothing saved yet); its fields go to `POST /employee/holidayworking/save`.
+  Past dates pass the review step. The list has five columns: number, date, vacation type, status,
+  reason. Clock times for a holiday need the day to count as worked first.
 - Manual clock records: `POST /employee/adit/insert/` as XHR, one per time, with the clock-edit
   page's `token`, `client_id`, `employee_id`, `time` as HHMM, `group_id` (spot) and `notice`
   (required when the label says "(Required)"). Answer `{result: 1}` or `{result: 0, errors}`.
